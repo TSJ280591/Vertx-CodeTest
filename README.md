@@ -1,18 +1,21 @@
-# KRY code assignment
+# Code assignment
+A backend service written in Vert.x (https://vertx.io/) that keeps a list of services (defined by a URL), and periodically does a HTTP GET to each and saves the response ("OK" or "FAIL") to a database. Here we are using the Sqlite db.
 
-One of our developers built a simple service poller.
-The service consists of a backend service written in Vert.x (https://vertx.io/) that keeps a list of services (defined by a URL), and periodically does a HTTP GET to each and saves the response ("OK" or "FAIL").
 
-Unfortunately, the original developer din't finish the job, and it's now up to you to complete the thing.
-Some of the issues are critical, and absolutely need to be fixed for this assignment to be considered complete.
-There is also a wishlist of features in two separate tracks - if you have time left, please choose *one* of the tracks and complete as many of those issues as you can.
+# Completed Issues 
 
-Critical issues (required to complete the assignment):
+ - Added services persists across server restarts
+ - Option to Delete individual services
+ - Able to name services and remember when they were added
+ - The HTTP poller implementation is completed
+ - Protect the poller from misbehaving services (for example services responding really slowly)
+ - Service URL's are validated before saving into DB
 
-- Whenever the server is restarted, any added services disappear
-- There's no way to delete individual services
-- We want to be able to name services and remember when they were added
-- The HTTP poller is not implemented
+Frontend/Web track:
+ - Option to Delete services 
+  
+  
+# Pending Issue 
 
 Frontend/Web track:
 - We want full create/update/delete functionality for services
@@ -21,19 +24,13 @@ Frontend/Web track:
 
 Backend track
 - Simultaneous writes sometimes causes strange behavior
-- Protect the poller from misbehaving services (for example answering really slowly)
-- Service URL's are not validated in any way ("sdgf" is probably not a valid service)
 - A user (with a different cookie/local storage) should not see the services added by another user
 
-Spend maximum four hours working on this assignment - make sure to finish the issues you start.
-
-Put the code in a git repo on GitHub and send us the link (niklas.holmqvist@kry.se) when you are done.
-
-Good luck!
-
 # Building
-We recommend using IntelliJ as it's what we use day to day at the KRY office.
-In intelliJ, choose
+
+After clone the project import it as a gradle project in to one of your favourite IDEs. I have used IntelliJ for developing the project.
+In intelliJ, choose the below steps for importing the project
+
 ```
 New -> New from existing sources -> Import project from external model -> Gradle -> select "use gradle wrapper configuration"
 ```
