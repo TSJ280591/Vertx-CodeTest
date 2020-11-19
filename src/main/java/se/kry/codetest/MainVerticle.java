@@ -153,7 +153,7 @@ public class MainVerticle extends AbstractVerticle {
         JsonObject jsonBody = context.getBodyAsJson();
         String url = jsonBody.getString("url");
         // In case the URL is not valid or the URL is a duplicate one, ignore the request
-        if(isValidUrl(url)&& !services.containsKey(url)) {
+        if(isValidUrl(url) && !services.containsKey(url)) {
             String name = jsonBody.getString("name");
             String currentTm = getCurrentTime();
             JsonArray jsonArr = new JsonArray();
@@ -208,8 +208,12 @@ public class MainVerticle extends AbstractVerticle {
     public void stop() throws Exception {
         LOGGER.info("Stopping Main verticle");
         super.stop();
-        poller.stop();
-        connector.stop();
+        if(poller!=null) {
+            poller.stop();
+        }
+        if(connector!=null){
+            connector.stop();
+        }
     }
 }
 

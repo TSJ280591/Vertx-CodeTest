@@ -21,39 +21,40 @@ import java.util.Map;
 
 public class BackgroundPoller {
 
-   private static final String STATUS_OK = "OK";
-   private static final String STATUS_FAIL = "FAIL";
-   private static final String STATUS_UNKNOWN = "UNKNOWN";
-   private static final int HTTP_CODE_SUCCESS = 200;
-   private static final int TIMEOUT = 5000;
-   private static final int MAX_TRIES = 5;
-   private static final Logger LOGGER = LoggerFactory.getLogger(BackgroundPoller
-           .class);
-   private static final String FILE_NAME = "failed_services.csv";
+    private static final String STATUS_OK = "OK";
+    private static final String STATUS_FAIL = "FAIL";
+    private static final String STATUS_UNKNOWN = "UNKNOWN";
+    private static final int HTTP_CODE_SUCCESS = 200;
+    private static final int TIMEOUT = 5000;
+    private static final int MAX_TRIES = 5;
+    private static final Logger LOGGER = LoggerFactory.getLogger(BackgroundPoller
+            .class);
+    private static final String FILE_NAME = "failed_services.csv";
 
-   private Map<String, String> servicesFailedDbSave = new HashMap<>();
-   private Map<String, Integer> urlTryCounter = new HashMap<>();
-   private WebClient webClient;
-   private DBConnector connector;
+    private Map<String, String> servicesFailedDbSave = new HashMap<>();
+    private Map<String, Integer> urlTryCounter = new HashMap<>();
+    private WebClient webClient;
+    private DBConnector connector;
 
-   public BackgroundPoller(Vertx vertx, DBConnector connector) {
-      WebClientOptions options = new WebClientOptions();
-      options.setKeepAlive(false);
-      webClient = WebClient.create(vertx, options);
-      this.connector = connector;
-   }
+    public BackgroundPoller(Vertx vertx, DBConnector connector) {
+        WebClientOptions options = new WebClientOptions();
+        options.setKeepAlive(false);
+        webClient = WebClient.create(vertx, options);
+        this.connector = connector;
+    }
 
 
     public Future<List<String>> pollServices(Map<String, Service> services) {
 
-        LOGGER.info("Starting the poller service..");
+        LOGGER.info("Poller starting.");
 
         if (services.isEmpty()) {
             LOGGER.info("No URLs to process..Exiting...");
             Future.succeededFuture();
         }
         services.forEach((url, service) -> {
-            if (!checkIfMaxTriesExhausted(url)) {
+            //If the URL has already been tried the MAX ALLOWED times, don't try again
+            if (!hasMaxRetriesExhausted(url)) {
                 String currentStatus = service.getStatus();
                 webClient.getAbs(url).timeout(TIMEOUT).send(ar -> {
                     String urlCallStatus = STATUS_UNKNOWN;
@@ -64,7 +65,7 @@ public class BackgroundPoller {
                             urlCallStatus = STATUS_FAIL;
                         }
                     } else {
-                        //If the request failed, make it unknown
+                        //If the request failed (either because of timeout or invalid URL), make it unknown
                         updateUrlTriesCounter(url);
                         LOGGER.error("Error calling the URL :" + url + "; cause = " + ar.cause());
                     }
@@ -80,13 +81,11 @@ public class BackgroundPoller {
     }
 
     private void updateUrlTriesCounter(String url) {
-
         int noOfTries = urlTryCounter.get(url) == null ? 0 : urlTryCounter.get(url);
         urlTryCounter.put(url, noOfTries + 1);
-       // urlTryCounter.forEach((a,v) -> System.out.println(a + ":"+ v));
     }
 
-    private boolean checkIfMaxTriesExhausted(String url) {
+    private boolean hasMaxRetriesExhausted(String url) {
         if (urlTryCounter.get(url) == null) {
             return false;
         }
@@ -119,6 +118,8 @@ public class BackgroundPoller {
      * Stop the Poller Service
      */
     public void stop() {
+        webClient.close();
+
         if (servicesFailedDbSave.isEmpty()) {
             return;
         }
