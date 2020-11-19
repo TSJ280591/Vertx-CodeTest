@@ -44,100 +44,91 @@ public class BackgroundPoller {
    }
 
 
-   public Future<List<String>> pollServices(Map<String, Service> services) {
+    public Future<List<String>> pollServices(Map<String, Service> services) {
 
-      LOGGER.info("Starting the poller service..");
+        LOGGER.info("Starting the poller service..");
 
-      if (services.isEmpty()) {
-         LOGGER.info("No URLs to process..Exiting...");
-         Future.succeededFuture();
-      }
-      services.forEach((url, service) -> {
-         if(!checkIfMaxTriesExhausted(url)) {
-            String currentStatus = service.getStatus();
-            webClient.getAbs(url).timeout(TIMEOUT).send(ar -> {
-               String urlCallStatus = STATUS_UNKNOWN;
-               if (ar.succeeded()) {
-                  if (ar.result().statusCode() == HTTP_CODE_SUCCESS) {
-                     urlCallStatus = STATUS_OK;
-                  } else {
-                     urlCallStatus = STATUS_FAIL;
-                  }
-               } else {
-                  //If the request failed, make it unknown
-                  updateUrlTriesCounter(url);
-                  LOGGER.error("Error calling the URL :" + url + "; cause = " + ar.cause());
-               }
+        if (services.isEmpty()) {
+            LOGGER.info("No URLs to process..Exiting...");
+            Future.succeededFuture();
+        }
+        services.forEach((url, service) -> {
+            if (!checkIfMaxTriesExhausted(url)) {
+                String currentStatus = service.getStatus();
+                webClient.getAbs(url).timeout(TIMEOUT).send(ar -> {
+                    String urlCallStatus = STATUS_UNKNOWN;
+                    if (ar.succeeded()) {
+                        if (ar.result().statusCode() == HTTP_CODE_SUCCESS) {
+                            urlCallStatus = STATUS_OK;
+                        } else {
+                            urlCallStatus = STATUS_FAIL;
+                        }
+                    } else {
+                        //If the request failed, make it unknown
+                        updateUrlTriesCounter(url);
+                        LOGGER.error("Error calling the URL :" + url + "; cause = " + ar.cause());
+                    }
+                    //Save to DB only if there is a change in status
+                    if (!currentStatus.equals(urlCallStatus)) {
+                        service.setStatus(urlCallStatus);
+                        saveToDb(url, urlCallStatus);
+                    }
+                });
+            }
+        });
+        return Future.succeededFuture();
+    }
 
-               //Save to DB only if there is a change in status
-               if (!currentStatus.equals(urlCallStatus)) {
-                  service.setStatus(urlCallStatus);
-                  Future<Void> dbOp = saveToDb(url, urlCallStatus);
-                  if (dbOp.failed()) {
-                     LOGGER.error("Error while saving URL : " + url + " to DB.. Need your Attention !");
-                     servicesFailedDbSave.put(url, urlCallStatus);
-                  } else {
-                     //If it failed as part of previous run, but succeeded now, remove it from the map
-                     if (servicesFailedDbSave.containsKey(url)) {
-                        servicesFailedDbSave.remove(url);
-                     }
-                  }
-               }
-            });
-         }
-      });
-      return Future.succeededFuture();
-   }
+    private void updateUrlTriesCounter(String url) {
 
-   private void updateUrlTriesCounter(String url){
-     int noOfTries = urlTryCounter.get(url) == null ? 0 : urlTryCounter.get(url);
-     urlTryCounter.put(url,noOfTries + 1);
-   }
+        int noOfTries = urlTryCounter.get(url) == null ? 0 : urlTryCounter.get(url);
+        urlTryCounter.put(url, noOfTries + 1);
+       // urlTryCounter.forEach((a,v) -> System.out.println(a + ":"+ v));
+    }
 
-   private boolean checkIfMaxTriesExhausted(String url){
-      if(urlTryCounter.get(url) == null){
-         return false;
-      }
-      return urlTryCounter.get(url) >= MAX_TRIES;
-   }
+    private boolean checkIfMaxTriesExhausted(String url) {
+        if (urlTryCounter.get(url) == null) {
+            return false;
+        }
+        return urlTryCounter.get(url) >= MAX_TRIES;
+    }
 
-   /**
-    * Save the URL & Status to Database
-    * @param url the URL
-    * @param status the status
-    * @return the Future indicating the status of operation
-    */
-   private Future<Void> saveToDb(String url, String status){
-      Future<Void> future = Future.future();
-      connector.updateWithParam(DBConnector.SQL_UPDATE_SERVICE, new JsonArray().add(status).add(url))
-           .setHandler(ar -> {
-              if (ar.succeeded()) {
-                 LOGGER.debug("Updated status against URL : "+url);
-                 future.complete();
-              } else {
-                 LOGGER.error("Error while updating the URL :"+url+" from DB, cause : "+ar.cause());
-                 future.fail(ar.cause());
-              }
-           });
-      return future;
-   }
+    /**
+     * Save the URL & Status to Database
+     *
+     * @param url    the URL
+     * @param status the status
+     * @return the Future indicating the status of operation
+     */
+    private void saveToDb(String url, String status) {
+        connector.updateWithParam(DBConnector.SQL_UPDATE_SERVICE, new JsonArray().add(status).add(url))
+                .setHandler(ar -> {
+                    if (ar.succeeded()) {
+                        LOGGER.debug("Updated status against URL : " + url);
+                        if (servicesFailedDbSave.containsKey(url)) {
+                            servicesFailedDbSave.remove(url);
+                        }
+                    } else {
+                        LOGGER.error("Error while updating the status, URL :" + url + " from DB, cause : " + ar.cause());
+                        servicesFailedDbSave.put(url, status);
+                    }
+                });
+    }
 
-   /**
-    * Stop the Poller Service
-    */
-   public void stop() {
-      if (servicesFailedDbSave.isEmpty()) {
-         return;
-      }
-      try (FileWriter writer = new FileWriter(FILE_NAME); BufferedWriter bw = new BufferedWriter(writer);) {
-         for (Map.Entry<String, String> entry : servicesFailedDbSave.entrySet()) {
-            bw.write(entry.getKey() + '|' + entry.getValue());
-            bw.newLine();
-         }
-      } catch (IOException e) {
-         LOGGER.error("Error while writing the data to File.." + e.getMessage());
-      }
-
-      webClient.close();
-   }
+    /**
+     * Stop the Poller Service
+     */
+    public void stop() {
+        if (servicesFailedDbSave.isEmpty()) {
+            return;
+        }
+        try (FileWriter writer = new FileWriter(FILE_NAME); BufferedWriter bw = new BufferedWriter(writer);) {
+            for (Map.Entry<String, String> entry : servicesFailedDbSave.entrySet()) {
+                bw.write(entry.getKey() + '|' + entry.getValue());
+                bw.newLine();
+            }
+        } catch (IOException e) {
+            LOGGER.error("Error while writing the data to File.." + e.getMessage());
+        }
+    }
 }
