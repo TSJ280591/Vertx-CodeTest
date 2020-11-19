@@ -35,7 +35,7 @@ In intelliJ, choose the below steps for importing the project
 New -> New from existing sources -> Import project from external model -> Gradle -> select "use gradle wrapper configuration"
 ```
 
-You can also run gradle directly from the command line:
+You can run the project either from IntelliJ dirctly or using the below command from terminal
 ```
 ./gradlew clean run
 ```
